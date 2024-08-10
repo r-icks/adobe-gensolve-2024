@@ -75,7 +75,7 @@ const DrawingApp = () => {
 
     try {
       const response = await axios.post(
-        "http://localhost:5000/upload-csv",
+        `${process.env.REACT_APP_API_URL}/upload-csv`,
         formData,
         {
           responseType: "blob", // Important to handle binary response
