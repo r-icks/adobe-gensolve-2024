@@ -8,12 +8,10 @@ import cv2 as cv
 from io import BytesIO
 import zipfile
 
-# Load environment variables from .env file
 load_dotenv()
 
 app = Flask(__name__)
 
-# Enable CORS with specific origin
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
 CORS(app, resources={r"/*": {"origins": frontend_url}})
 
@@ -145,11 +143,9 @@ def process_csv_and_generate_image(polylines):
     for contour in contoursToDraw:
         cv.drawContours(img, [contour[0]], -1, contour[1], 1)
 
-    # Save the image to the backend folder
     output_image_path = os.path.join('backend', 'output_image.jpg')
     cv.imwrite(output_image_path, img)
 
-    # Prepare the image for sending as binary
     _, img_encoded = cv.imencode('.jpg', img)
     img_bytes = img_encoded.tobytes()
 
