@@ -52,6 +52,7 @@ const DrawingApp = () => {
     let csvContent = "";
 
     lines.forEach((line, polylineIndex) => {
+      console.log("temp");
       const zero = 0;
       line.points.forEach((point) => {
         const x = point.x.toExponential(17);
