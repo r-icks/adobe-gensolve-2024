@@ -5,7 +5,7 @@ import { Stage, Layer, Line } from "react-konva";
 const DrawingApp = () => {
   const [lines, setLines] = useState([]);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [isLoading, setIsLoading] = useState(false); // Loading state
+  const [isLoading, setIsLoading] = useState(false);
   const lastPosRef = useRef(null);
 
   const handleMouseDown = (e) => {
@@ -78,7 +78,7 @@ const DrawingApp = () => {
         `${process.env.REACT_APP_API_URL}/upload-csv`,
         formData,
         {
-          responseType: "blob", // Important to handle binary response
+          responseType: "blob",
         }
       );
 
