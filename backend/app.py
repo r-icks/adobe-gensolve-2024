@@ -107,8 +107,13 @@ def process_csv_and_generate_image(polylines):
             cv.drawContours(mask, [contour[0]], -1, 0, 1)
             contoursToDraw.append((contour[1], (0, 128, 0)))
         elif shape == "rectangle":
-            xi, yi, wi, hi = cv.boundingRect(contour[0])
-            boundingBox.append((xi, yi, wi, hi))
+            # xi, yi, wi, hi = cv.boundingRect(contour[0])
+            # boundingBox.append((xi, yi, wi, hi))
+            # cv.drawContours(mask, [contour[0]], -1, 0, 1)
+            rect = cv.minAreaRect(contour[0])
+            box = cv.boxPoints(rect)
+            box = box.astype(int)
+            boundingBox.append(box)
             cv.drawContours(mask, [contour[0]], -1, 0, 1)
         elif shape == "pentagon":
             cv.drawContours(mask, [contour[0]], -1, 0, 1)
@@ -140,9 +145,65 @@ def process_csv_and_generate_image(polylines):
     for info in circleInfo:
         cv.circle(img, info[0], info[1] - 5, (0, 0, 255), 1) # red
     for box in boundingBox:
-        cv.rectangle(img, (box[0] + 2, box[1] + 2), (box[0] + box[2] - 2, box[1] + box[3] - 2), (255, 0, 0), 1) # blue
+        cv.drawContours(img, [box], 0, (255, 0, 0), 1)  # blue
+        # cv.rectangle(img, (box[0] + 2, box[1] + 2), (box[0] + box[2] - 2, box[1] + box[3] - 2), (255, 0, 0), 1) # blue
     for contour in contoursToDraw:
         cv.drawContours(img, [contour[0]], -1, contour[1], 1)
+    
+    for info in circleInfo:
+        center, radius = info
+        cv.circle(img, center, radius - 5, (0, 0, 255), 1)  # red
+
+        cv.line(img, (center[0] - radius, center[1]), (center[0] + radius, center[1]), (0, 255, 0), 1)  # green
+        cv.line(img, (center[0], center[1] - radius), (center[0], center[1] + radius), (0, 255, 0), 1)  # green
+
+    for box in boundingBox:
+        # xi, yi, wi, hi = box
+        # cv.rectangle(img, (xi + 2, yi + 2), (xi + wi - 2, yi + hi - 2), (255, 0, 0), 1)  # blue
+
+        # center_x = xi + wi // 2
+        # center_y = yi + hi // 2
+        # cv.line(img, (center_x, yi), (center_x, yi + hi), (0, 255, 0), 1)  # green
+        # cv.line(img, (xi, center_y), (xi + wi, center_y), (0, 255, 0), 1)  # green
+        cv.drawContours(img, [box], 0, (255, 0, 0), 1)  # blue
+
+        # center_x = int(np.mean(box[:, 0]))
+        # center_y = int(np.mean(box[:, 1]))
+
+        # p1_v = tuple(box[0])
+        # p2_v = tuple(box[2])
+        # cv.line(img, p1_v, p2_v, (0, 255, 0), 1)  # green
+
+        p1_h = tuple(box[1])
+        p2_h = tuple(box[3])
+        cv.line(img, p1_h, p2_h, (0, 255, 0), 1)  # green
+        mid1 = tuple(((box[0] + box[1]) // 2).astype(int))
+        mid2 = tuple(((box[1] + box[2]) // 2).astype(int))
+        mid3 = tuple(((box[2] + box[3]) // 2).astype(int))
+        mid4 = tuple(((box[3] + box[0]) // 2).astype(int))
+
+        cv.line(img, mid1, mid3, (0, 255, 0), 1) 
+
+        cv.line(img, mid2, mid4, (0, 255, 0), 1)  
+
+    for contour in contoursToDraw[:1]:
+
+        M = cv.moments(contour[0])
+        if M['m00'] != 0:  
+            cx = int(M['m10'] / M['m00'])
+            cy = int(M['m01'] / M['m00'])
+
+            
+            contour_points = np.squeeze(contour[0]).astype(np.float32)
+            mean, eigenvectors = cv.PCACompute(contour_points, mean=np.array([]).astype(np.float32))
+            principal_axis = eigenvectors[0]
+            length = 100  
+            x1 = int(cx - length * principal_axis[0])
+            y1 = int(cy - length * principal_axis[1])
+            x2 = int(cx + length * principal_axis[0])
+            y2 = int(cy + length * principal_axis[1])
+
+            cv.line(img, (x1, y1), (x2, y2), (0, 255, 0), 1)  # green
 
     output_image_path = os.path.join('backend', 'output_image.jpg')
     cv.imwrite(output_image_path, img)
