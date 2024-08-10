@@ -61,6 +61,10 @@ def process_csv_and_generate_image(polylines):
                 shape = "circle"
                 shape_info.append((shape, (center, int(radius), contour)))
                 continue
+            circularity = 4 * np.pi * area / (peri ** 2)
+            if 0.43 < circularity < 0.79:
+                shape_info.append(("unidentified", contour))
+                continue
         else:
             eps = 0.02 * cv.arcLength(contour, True)
             approx = cv.approxPolyDP(contour, eps, True)
