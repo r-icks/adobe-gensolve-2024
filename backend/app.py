@@ -13,6 +13,7 @@ load_dotenv()
 app = Flask(__name__)
 
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+print("Allowing cors for frontend URL:", frontend_url)
 CORS(app, resources={r"/*": {"origins": frontend_url}})
 
 
