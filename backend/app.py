@@ -85,6 +85,17 @@ def process_csv_and_generate_image(polylines):
             pt2 = (int(round(polylines.iloc[i, 2])), int(round(polylines.iloc[i, 3])))
             cv.line(img, pt1, pt2, color=255, thickness=1)
 
+    input_csv_df = pd.DataFrame(polylines)
+    input_csv_buffer = BytesIO()
+    input_csv_df.to_csv(input_csv_buffer, index=False, header=False)
+    input_csv_buffer.seek(0)
+    input_image = img.copy()
+    input_image_path = os.path.join('backend', 'input_image.png')
+    cv.imwrite(input_image_path, input_image)
+
+    _, input_img_encoded = cv.imencode('.png', input_image)
+    input_img_bytes = input_img_encoded.tobytes()
+
     blur = cv.blur(img, (1, 1))
     _, binary = cv.threshold(blur, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
 
@@ -273,7 +284,7 @@ def process_csv_and_generate_image(polylines):
     csv_df.to_csv(csv_buffer, index=False, header=False)
     csv_buffer.seek(0)
 
-    return img_bytes, csv_buffer.getvalue()
+    return input_img_bytes, input_csv_buffer.getvalue(), img_bytes, csv_buffer.getvalue()
 
 @app.route('/upload-csv', methods=['POST'])
 def upload_csv():
@@ -290,11 +301,13 @@ def upload_csv():
 
     try:
         polylines = pd.read_csv(file, header=None)
-        img_bytes, csv_content = process_csv_and_generate_image(polylines)
+        input_img_bytes, input_csv_buffer, img_bytes, csv_content = process_csv_and_generate_image(polylines)
 
         zip_buffer = BytesIO()
 
         with zipfile.ZipFile(zip_buffer, 'w') as zf:
+            zf.writestr('input_image.png', input_img_bytes)
+            zf.writestr('input.csv', input_csv_buffer)
             zf.writestr('output_image.png', img_bytes)
             zf.writestr('output.csv', csv_content)
 
