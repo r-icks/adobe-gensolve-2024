@@ -9,6 +9,7 @@ from io import BytesIO
 import zipfile
 import svgwrite
 from svgpathtools import svg2paths
+import uuid
 
 load_dotenv()
 
@@ -251,15 +252,28 @@ def process_csv_and_generate_image(polylines):
 
     _, img_encoded = cv.imencode('.jpg', img)
     img_bytes = img_encoded.tobytes()
+    
+    output_filename = f"svg-{uuid.uuid4().hex}.svg"
 
-    # image_to_svg(img, finalContours, circleInfo, boundingBox, linesToDraw, filename="output.svg")
+    image_to_svg(img, finalContours, circleInfo, boundingBox, linesToDraw, filename=output_filename)
+    
+    output_polylines = svg2polylines(output_filename)
+    
+    if os.path.exists(output_filename):
+        os.remove(output_filename)
 
-    # output_polylines = svg2polylines('./output.svg')
-    # df = pd.DataFrame(output_polylines[0])
+    csv_data = []
+    for index, polyline in enumerate(output_polylines):
+        for point in polyline:
+            csv_data.append([index, 0, point[0], point[1]])
 
-    return img_bytes
+    csv_df = pd.DataFrame(csv_data)
 
+    csv_buffer = BytesIO()
+    csv_df.to_csv(csv_buffer, index=False, header=False)
+    csv_buffer.seek(0)
 
+    return img_bytes, csv_buffer.getvalue()
 
 @app.route('/upload-csv', methods=['POST'])
 def upload_csv():
@@ -276,15 +290,12 @@ def upload_csv():
 
     try:
         polylines = pd.read_csv(file, header=None)
-        img_bytes = process_csv_and_generate_image(polylines)
-
-        csv_content = "col1,col2\n".encode('utf-8')
+        img_bytes, csv_content = process_csv_and_generate_image(polylines)
 
         zip_buffer = BytesIO()
 
         with zipfile.ZipFile(zip_buffer, 'w') as zf:
             zf.writestr('output_image.jpg', img_bytes)
-
             zf.writestr('output.csv', csv_content)
 
         zip_buffer.seek(0)

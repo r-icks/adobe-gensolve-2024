@@ -4,3 +4,5 @@ python-dotenv
 pandas
 opencv-python
 gunicorn
+svgwrite
+svgpathtools
