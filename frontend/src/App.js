@@ -1,12 +1,14 @@
 import React, { useState, useRef } from "react";
 import axios from "axios";
 import { Stage, Layer, Line } from "react-konva";
+import { FaExclamationTriangle, FaPencilAlt } from "react-icons/fa";
 
 const DrawingApp = () => {
   const [lines, setLines] = useState([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const lastPosRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const handleMouseDown = (e) => {
     if (isLoading) return;
@@ -98,14 +100,72 @@ const DrawingApp = () => {
     }
   };
 
+  const processCSV = async (file) => {
+    setIsLoading(true);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await axios.post(
+        `${process.env.REACT_APP_API_URL}/upload-csv`,
+        formData,
+        {
+          responseType: "blob",
+        }
+      );
+
+      const zipBlob = new Blob([response.data], { type: "application/zip" });
+      const url = window.URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = url;
+      a.download = "results.zip";
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error during file download:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleProcessCSVClick = () => {
+    fileInputRef.current.click();
+  };
+
+  const handleFileChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      processCSV(file);
+    }
+  };
+
   return (
     <div>
+      <div
+        style={{
+          position: "fixed",
+          top: "20px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          color: "#007bff",
+          fontSize: "24px",
+          zIndex: 999,
+          display: "flex",
+          alignItems: "center",
+        }}
+      >
+        <FaPencilAlt style={{ marginRight: "10px" }} />
+        Draw Here
+      </div>
       <Stage
         width={window.innerWidth}
         height={window.innerHeight}
         onMouseDown={handleMouseDown}
-        onMousemove={handleMouseMove}
-        onMouseup={handleMouseUp}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
         style={{ pointerEvents: isLoading ? "none" : "auto" }}
       >
         <Layer>
@@ -122,6 +182,48 @@ const DrawingApp = () => {
           ))}
         </Layer>
       </Stage>
+      <div
+        style={{
+          position: "fixed",
+          bottom: "70px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          color: "#6c757d",
+          fontSize: "14px",
+          zIndex: 999,
+          display: "flex",
+          alignItems: "center",
+          pointerEvents: "none",
+        }}
+      >
+        <FaExclamationTriangle style={{ marginRight: "8px" }} />
+        It can take up to a minute to hit the backend API for the first time.
+      </div>
+      <button
+        onClick={handleProcessCSVClick}
+        disabled={isLoading}
+        style={{
+          position: "fixed",
+          bottom: "20px",
+          left: "20px",
+          padding: "10px 20px",
+          backgroundColor: isLoading ? "gray" : "#28a745",
+          color: "white",
+          border: "none",
+          borderRadius: "5px",
+          cursor: "pointer",
+          zIndex: 1000,
+        }}
+      >
+        {isLoading ? "Processing..." : "Upload CSV"}
+      </button>
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept=".csv"
+        onChange={handleFileChange}
+        style={{ display: "none" }}
+      />
       <button
         onClick={downloadResults}
         disabled={isLoading}
