@@ -56,12 +56,18 @@ def convert_arrays_to_csv(arrays, output_csv_path):
             for point in arr:
                 data.append([idx, 0, float(point[0]), float(point[1])])
         df = pd.DataFrame(data)
-        df.to_csv(output_csv_path, index=False, header=None)
+        if not os.path.exists("./examples"):
+            os.makedirs("./examples")
+        
+        file_path = os.path.join("./examples", output_csv_path)
+        df.to_csv(file_path, index=False, header=None)
     except Exception as e:
         raise RuntimeError(f"Failed to save arrays to CSV: {str(e)}")
 
 def main():
     path = input("Enter path to CSV file: ").strip()
+    file_name = os.path.basename(path)
+    file_name, _ = os.path.splitext(file_name)
     if not os.path.isfile(path):
         raise FileNotFoundError(f"CSV file not found at: {path}")
     
@@ -240,7 +246,7 @@ def main():
 
     try:
         polylines = svg2polylines("output.svg")
-        convert_arrays_to_csv(polylines, output_csv_path="output.csv")
+        convert_arrays_to_csv(polylines, output_csv_path=f"{file_name}_sol.csv")
         os.remove('output.svg')
     except Exception as e:
         raise RuntimeError(f"Failed to process SVG file: {str(e)}")
