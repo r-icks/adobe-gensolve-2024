@@ -247,10 +247,10 @@ def process_csv_and_generate_image(polylines):
             cv.line(img, (x1, y1), (x2, y2), (0, 255, 0), 1)
             linesToDraw.append([(x1, y1), (x2, y2)])
 
-    output_image_path = os.path.join('backend', 'output_image.jpg')
+    output_image_path = os.path.join('backend', 'output_image.png')
     cv.imwrite(output_image_path, img)
 
-    _, img_encoded = cv.imencode('.jpg', img)
+    _, img_encoded = cv.imencode('.png', img)
     img_bytes = img_encoded.tobytes()
     
     output_filename = f"svg-{uuid.uuid4().hex}.svg"
@@ -295,7 +295,7 @@ def upload_csv():
         zip_buffer = BytesIO()
 
         with zipfile.ZipFile(zip_buffer, 'w') as zf:
-            zf.writestr('output_image.jpg', img_bytes)
+            zf.writestr('output_image.png', img_bytes)
             zf.writestr('output.csv', csv_content)
 
         zip_buffer.seek(0)
