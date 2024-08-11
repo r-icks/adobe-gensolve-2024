@@ -7,6 +7,8 @@ import numpy as np
 import cv2 as cv
 from io import BytesIO
 import zipfile
+import svgwrite
+from svgpathtools import svg2paths
 
 load_dotenv()
 
@@ -16,6 +18,55 @@ frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
 print("Allowing cors for frontend URL:", frontend_url)
 CORS(app, resources={r"/*": {"origins": frontend_url}})
 
+def image_to_svg(img, contours_to_draw, circle_info, bounding_box, linesToDraw, filename="output.svg"):
+    height, width = img.shape[:2]
+    dwg = svgwrite.Drawing(filename, profile='full', size=(width, height))
+    
+    for contour, color in contours_to_draw:
+        points = contour[:, 0, :].tolist()
+        path_data = f"M {points[0][0]},{points[0][1]} " + " ".join([f"L {p[0]},{p[1]}" for p in points[1:]])
+        path_data += " Z"
+        path = dwg.path(d=path_data, stroke=svgwrite.rgb(*color, '%'), fill="none", stroke_width=1)
+        dwg.add(path)
+    
+    for center, radius in circle_info:
+        dwg.add(dwg.circle(center=center, r=radius, stroke=svgwrite.rgb(0, 0, 255, '%'), fill="none", stroke_width=1))
+    
+    for box in bounding_box:
+        points = box.tolist()
+        for i in range(4):
+            x1, y1 = points[i]
+            x2, y2 = points[(i + 1) % 4]
+            dwg.add(dwg.line((x1, y1), (x2, y2), stroke=svgwrite.rgb(255, 0, 0, '%'), stroke_width=1))
+
+    for line in linesToDraw:
+        dwg.add(dwg.line((int(a) for a in line[0]), (int(a) for a in line[1]), stroke=svgwrite.rgb(0, 255, 0, '%'), stroke_width=1))
+
+    dwg.save()
+
+def svg2polylines(svg_path):
+    paths, attributes = svg2paths(svg_path)
+    
+    polylines = []
+    for path in paths:
+        polyline = []
+        for segment in path:
+            start_point = segment.start
+            end_point = segment.end
+            
+            polyline.append((start_point.real, start_point.imag))
+            
+            if segment.__class__.__name__ != 'Line':
+                for t in np.linspace(0, 1, num=100):
+                    point = segment.point(t)
+                    polyline.append((point.real, point.imag))
+            
+            polyline.append((end_point.real, end_point.imag))
+        
+        polyline = np.array(polyline)
+        polylines.append(polyline)
+    
+    return polylines
 
 def process_csv_and_generate_image(polylines):
     """
@@ -62,6 +113,10 @@ def process_csv_and_generate_image(polylines):
                 shape = "circle"
                 shape_info.append((shape, (center, int(radius), contour)))
                 continue
+            circularity = 4 * np.pi * area / (peri ** 2)
+            if 0.43 < circularity < 0.79:
+                shape_info.append(("unidentified", contour))
+                continue
         else:
             eps = 0.02 * cv.arcLength(contour, True)
             approx = cv.approxPolyDP(contour, eps, True)
@@ -101,15 +156,14 @@ def process_csv_and_generate_image(polylines):
     circleInfo = []
     boundingBox = []
     contoursToDraw = []
+    finalContours = []
+    linesToDraw = []
 
     for shape, contour in shape_info:
         if shape == "triangle":
             cv.drawContours(mask, [contour[0]], -1, 0, 1)
             contoursToDraw.append((contour[1], (0, 128, 0)))
         elif shape == "rectangle":
-            # xi, yi, wi, hi = cv.boundingRect(contour[0])
-            # boundingBox.append((xi, yi, wi, hi))
-            # cv.drawContours(mask, [contour[0]], -1, 0, 1)
             rect = cv.minAreaRect(contour[0])
             box = cv.boxPoints(rect)
             box = box.astype(int)
@@ -139,44 +193,26 @@ def process_csv_and_generate_image(polylines):
             cv.drawContours(mask, [contour[2]], -1, 0, 1)
         else:
             cv.drawContours(img, [contour], -1, (255, 255, 0), 1)
+            finalContours.append((contour, (255, 255, 0)))
 
     img = cv.bitwise_and(img, img, mask=mask)
 
     for info in circleInfo:
-        cv.circle(img, info[0], info[1] - 5, (0, 0, 255), 1) # red
-    for box in boundingBox:
-        cv.drawContours(img, [box], 0, (255, 0, 0), 1)  # blue
-        # cv.rectangle(img, (box[0] + 2, box[1] + 2), (box[0] + box[2] - 2, box[1] + box[3] - 2), (255, 0, 0), 1) # blue
-    for contour in contoursToDraw:
-        cv.drawContours(img, [contour[0]], -1, contour[1], 1)
-    
-    for info in circleInfo:
         center, radius = info
-        cv.circle(img, center, radius - 5, (0, 0, 255), 1)  # red
+        cv.circle(img, center, radius - 5, (0, 0, 255), 1)
 
-        cv.line(img, (center[0] - radius, center[1]), (center[0] + radius, center[1]), (0, 255, 0), 1)  # green
-        cv.line(img, (center[0], center[1] - radius), (center[0], center[1] + radius), (0, 255, 0), 1)  # green
+        cv.line(img, (center[0] - radius, center[1]), (center[0] + radius, center[1]), (0, 255, 0), 1)
+        cv.line(img, (center[0], center[1] - radius), (center[0], center[1] + radius), (0, 255, 0), 1)
+        linesToDraw.append([(int(center[0] - radius), int(center[1])), (int(center[0] + radius), int(center[1]))])
+        linesToDraw.append([(int(center[0]), int(center[1] - radius)), (int(center[0]), int(center[1] + radius))])
 
     for box in boundingBox:
-        # xi, yi, wi, hi = box
-        # cv.rectangle(img, (xi + 2, yi + 2), (xi + wi - 2, yi + hi - 2), (255, 0, 0), 1)  # blue
-
-        # center_x = xi + wi // 2
-        # center_y = yi + hi // 2
-        # cv.line(img, (center_x, yi), (center_x, yi + hi), (0, 255, 0), 1)  # green
-        # cv.line(img, (xi, center_y), (xi + wi, center_y), (0, 255, 0), 1)  # green
-        cv.drawContours(img, [box], 0, (255, 0, 0), 1)  # blue
-
-        # center_x = int(np.mean(box[:, 0]))
-        # center_y = int(np.mean(box[:, 1]))
-
-        # p1_v = tuple(box[0])
-        # p2_v = tuple(box[2])
-        # cv.line(img, p1_v, p2_v, (0, 255, 0), 1)  # green
+        cv.drawContours(img, [box], 0, (255, 0, 0), 1)
 
         p1_h = tuple(box[1])
         p2_h = tuple(box[3])
-        cv.line(img, p1_h, p2_h, (0, 255, 0), 1)  # green
+        cv.line(img, p1_h, p2_h, (0, 255, 0), 1)
+        linesToDraw.append([p1_h, p2_h])
         mid1 = tuple(((box[0] + box[1]) // 2).astype(int))
         mid2 = tuple(((box[1] + box[2]) // 2).astype(int))
         mid3 = tuple(((box[2] + box[3]) // 2).astype(int))
@@ -184,9 +220,13 @@ def process_csv_and_generate_image(polylines):
 
         cv.line(img, mid1, mid3, (0, 255, 0), 1) 
 
-        cv.line(img, mid2, mid4, (0, 255, 0), 1)  
+        cv.line(img, mid2, mid4, (0, 255, 0), 1)
+        linesToDraw.append([mid1, mid3])
+        linesToDraw.append([mid2, mid4])
 
-    for contour in contoursToDraw[:1]:
+    for contour in contoursToDraw:
+        cv.drawContours(img, [contour[0]], -1, contour[1], 1)
+        finalContours.append(contour)
 
         M = cv.moments(contour[0])
         if M['m00'] != 0:  
@@ -203,7 +243,8 @@ def process_csv_and_generate_image(polylines):
             x2 = int(cx + length * principal_axis[0])
             y2 = int(cy + length * principal_axis[1])
 
-            cv.line(img, (x1, y1), (x2, y2), (0, 255, 0), 1)  # green
+            cv.line(img, (x1, y1), (x2, y2), (0, 255, 0), 1)
+            linesToDraw.append([(x1, y1), (x2, y2)])
 
     output_image_path = os.path.join('backend', 'output_image.jpg')
     cv.imwrite(output_image_path, img)
@@ -211,7 +252,13 @@ def process_csv_and_generate_image(polylines):
     _, img_encoded = cv.imencode('.jpg', img)
     img_bytes = img_encoded.tobytes()
 
+    # image_to_svg(img, finalContours, circleInfo, boundingBox, linesToDraw, filename="output.svg")
+
+    # output_polylines = svg2polylines('./output.svg')
+    # df = pd.DataFrame(output_polylines[0])
+
     return img_bytes
+
 
 
 @app.route('/upload-csv', methods=['POST'])
@@ -228,29 +275,20 @@ def upload_csv():
         return jsonify({"error": "File is not a CSV"}), 400
 
     try:
-        # Read the CSV file using pandas
         polylines = pd.read_csv(file, header=None)
-
-        # Process the CSV to generate the image
         img_bytes = process_csv_and_generate_image(polylines)
 
-        # Prepare an empty CSV (this is a placeholder; you can generate your CSV dynamically)
         csv_content = "col1,col2\n".encode('utf-8')
 
-        # Create a BytesIO object to hold the ZIP file in memory
         zip_buffer = BytesIO()
 
         with zipfile.ZipFile(zip_buffer, 'w') as zf:
-            # Add the image to the ZIP
             zf.writestr('output_image.jpg', img_bytes)
 
-            # Add the CSV to the ZIP
             zf.writestr('output.csv', csv_content)
 
-        # Ensure the buffer is at the beginning for reading
         zip_buffer.seek(0)
 
-        # Send the ZIP file as a response
         return send_file(
             zip_buffer,
             mimetype='application/zip',
